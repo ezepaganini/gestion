@@ -311,6 +311,7 @@ function defaultState(){
     categories: DEFAULT_CATEGORIES.slice(),
     accounts:[],
     fixedExpenses:[],
+    installments:[],
     goals:[],
     transactions:[],
     budgets:{ variableBudget:0, categoryBudgets:{} }
@@ -330,6 +331,7 @@ function loadState(){
       categories: parsed.categories && parsed.categories.length ? parsed.categories : d.categories,
       accounts: parsed.accounts || [],
       fixedExpenses: parsed.fixedExpenses || [],
+      installments: parsed.installments || [],
       goals: parsed.goals || [],
       transactions: parsed.transactions || [],
       budgets: Object.assign({variableBudget:0,categoryBudgets:{}}, parsed.budgets||{})
@@ -443,6 +445,16 @@ function fixedExpensesTotal(onlyActive){
   return state.fixedExpenses.filter(function(f){return onlyActive?f.active:true;})
     .reduce(function(s,f){return s+f.amount;},0);
 }
+function installmentAmount(item){
+  return Math.round((item.totalAmount||0)/(item.numInstallments||1));
+}
+function installmentRemaining(item){
+  return Math.max(0, (item.numInstallments||0) - (item.paidCount||0));
+}
+function installmentsMonthlyTotal(onlyActive){
+  return state.installments.filter(function(i){ return (onlyActive?i.active:true) && installmentRemaining(i)>0; })
+    .reduce(function(s,i){ return s+installmentAmount(i); },0);
+}
 function goalsMonthlyPlan(){
   return state.goals.reduce(function(s,g){return s+(g.monthlyContribution||0);},0);
 }
@@ -456,9 +468,10 @@ function monthSummary(y,m){
   var ingresos = txInMonth(y,m,function(t){return t.type==="ingreso";}).reduce(function(s,t){return s+t.amount;},0);
   var expectedIncome = state.config.monthlyIncome||0;
   var ingresosEsperados = Math.max(ingresos, expectedIncome);
-  var gastosVariables = txInMonth(y,m,function(t){return t.type==="gasto" && t.subtype!=="extraordinario";}).reduce(function(s,t){return s+t.amount;},0);
+  var gastosVariables = txInMonth(y,m,function(t){return t.type==="gasto" && t.subtype!=="extraordinario" && t.subtype!=="cuota";}).reduce(function(s,t){return s+t.amount;},0);
   var gastosExtra = txInMonth(y,m,function(t){return t.type==="gasto" && t.subtype==="extraordinario";}).reduce(function(s,t){return s+t.amount;},0);
   var gastosFijos = fixedExpensesTotal(true);
+  var gastosCuotas = installmentsMonthlyTotal(true);
   var ahorro = txInMonth(y,m,function(t){return t.type==="aporte";}).reduce(function(s,t){return s+t.amount;},0);
   var retiros = txInMonth(y,m,function(t){return t.type==="retiro";}).reduce(function(s,t){return s+t.amount;},0);
   return {
@@ -467,7 +480,8 @@ function monthSummary(y,m){
     gastosVariables: gastosVariables,
     gastosExtra: gastosExtra,
     gastosFijos: gastosFijos,
-    gastoTotal: gastosVariables+gastosExtra+gastosFijos,
+    gastosCuotas: gastosCuotas,
+    gastoTotal: gastosVariables+gastosExtra+gastosFijos+gastosCuotas,
     ahorro: ahorro - retiros,
     tasaAhorro: ingresosEsperados>0 ? ((ahorro-retiros)/ingresosEsperados*100) : 0
   };
@@ -475,7 +489,7 @@ function monthSummary(y,m){
 function currentVariableBudget(){
   var ms = monthSummary(new Date().getFullYear(), new Date().getMonth());
   if(state.budgets.variableBudget>0) return state.budgets.variableBudget;
-  var margen = ms.ingresos - ms.gastosFijos - goalsMonthlyPlan();
+  var margen = ms.ingresos - ms.gastosFijos - ms.gastosCuotas - goalsMonthlyPlan();
   return Math.max(0, margen);
 }
 function dailyBudgetInfo(){
@@ -559,6 +573,10 @@ function computeAlerts(){
     var pctFijos = ms.gastosFijos/ms.ingresos*100;
     if(pctFijos>40){
       alerts.push("Tus gastos fijos representan el " + Math.round(pctFijos) + "% de tus ingresos.");
+    }
+    var pctComprometido = (ms.gastosFijos+ms.gastosCuotas)/ms.ingresos*100;
+    if(ms.gastosCuotas>0 && pctComprometido>55){
+      alerts.push("Entre gastos fijos y cuotas estás comprometiendo el " + Math.round(pctComprometido) + "% de tus ingresos.");
     }
   }
   var db = dailyBudgetInfo();
@@ -829,14 +847,43 @@ function renderMovimientos(){
     html += '</div>';
   }
 
+  html += sectionHead("Compras en cuotas", fmtMoney(installmentsMonthlyTotal(true))+"/mes");
+  if(state.installments.length===0){
+    html += '<div class="card"><div class="empty" style="padding:14px;">Sin compras en cuotas.<br><button class="btn soft" id="btnAddInstallment" style="margin-top:10px;">'+iconPlus()+' Agregar compra en cuotas</button></div></div>';
+  }else{
+    html += '<div class="card">';
+    state.installments.forEach(function(it){
+      var rem = installmentRemaining(it);
+      var amt = installmentAmount(it);
+      var done = rem<=0;
+      html += '<div style="padding:10px 0; border-top:1px solid var(--line);" data-installment="'+it.id+'">' +
+        '<div class="row" style="border:none; margin:0; padding:0;"><div class="left"><div class="dot" style="background:'+(done?'var(--line-strong)':(it.active?'var(--accent)':'var(--line-strong)'))+';"></div>' +
+        '<div><div class="name">'+escapeHTML(it.name)+'</div><div class="meta">'+escapeHTML(it.category)+' · cuota '+Math.min(it.paidCount,it.numInstallments)+'/'+it.numInstallments+(done?' · saldada':'')+'</div></div></div>' +
+        '<div class="amt">'+fmtMoney(amt)+'</div></div>' +
+        '<div class="progress-track" style="margin-top:8px;"><div class="progress-fill" style="width:'+clamp((it.paidCount/it.numInstallments*100)||0,0,100)+'%;"></div></div>' +
+        (done ? '' : '<div class="modal-actions" style="margin-top:8px;">' +
+          '<button class="btn soft" data-payinstallment="'+it.id+'">Marcar cuota pagada</button>' +
+          '<button class="btn ghost" data-editinstallment="'+it.id+'">Editar</button>' +
+        '</div>') +
+      '</div>';
+    });
+    html += '<button class="btn ghost block" id="btnAddInstallment" style="margin-top:12px;">'+iconPlus()+' Agregar compra en cuotas</button>';
+    html += '</div>';
+  }
+
   html += sectionHead("Movimientos recientes","");
   html += '<div class="tabsel" id="movFilterTabs">' +
-    ["todos","gasto","ingreso","aporte","transferencia"].map(function(f){
-      var lbl = {todos:"Todos",gasto:"Gastos",ingreso:"Ingresos",aporte:"Aportes",transferencia:"Transferencias"}[f];
+    ["todos","gasto","cuota","ingreso","aporte","transferencia"].map(function(f){
+      var lbl = {todos:"Todos",gasto:"Gastos",cuota:"Cuotas",ingreso:"Ingresos",aporte:"Aportes",transferencia:"Transferencias"}[f];
       return '<button data-f="'+f+'" class="'+(movFilter===f?"active":"")+'">'+lbl+'</button>';
     }).join("") + '</div>';
 
-  var txs = state.transactions.filter(function(t){ return movFilter==="todos" ? true : t.type===movFilter; })
+  var txs = state.transactions.filter(function(t){
+      if(movFilter==="todos") return true;
+      if(movFilter==="cuota") return t.type==="gasto" && t.subtype==="cuota";
+      if(movFilter==="gasto") return t.type==="gasto" && t.subtype!=="cuota";
+      return t.type===movFilter;
+    })
     .slice().sort(function(a,b){ return b.date.localeCompare(a.date) || b.id.localeCompare(a.id); });
 
   if(txs.length===0){
@@ -897,6 +944,7 @@ function renderObjetivos(){
     }
     html += '<div class="modal-actions" style="margin-top:12px;">' +
       '<button class="btn soft" data-aportar="'+g.id+'">Aportar</button>' +
+      (cur>0 ? '<button class="btn ghost" data-retirar="'+g.id+'">Retirar</button>' : '') +
       '<button class="btn ghost" data-editgoal="'+g.id+'">Editar</button>' +
       '</div>';
     html += '</div>';
@@ -1167,7 +1215,8 @@ function renderPresupuesto(){
     html += '<div style="margin-bottom:14px;">' +
       '<div class="row" style="border:none; padding:0; margin:0 0 6px;"><div class="name">'+cat+'</div>' +
       '<div class="meta">'+fmtMoney(spent)+(budget>0?" / "+fmtMoney(budget):"")+'</div></div>' +
-      (budget>0 ? '<div class="progress-track"><div class="progress-fill '+cls+'" style="width:'+Math.min(100,pct)+'%;"></div></div>' : '<input type="number" placeholder="Definir presupuesto" data-catbudget="'+cat+'" style="width:100%; margin-top:4px; padding:8px 10px; border-radius:8px; border:1px solid var(--line-strong); background:var(--paper); color:var(--ink);">') +
+      (budget>0 ? '<div class="progress-track"><div class="progress-fill '+cls+'" style="width:'+Math.min(100,pct)+'%;"></div></div>' : '') +
+      '<input type="number" placeholder="Definir presupuesto" value="'+(budget||"")+'" data-catbudget="'+cat+'" style="width:100%; margin-top:6px; padding:8px 10px; border-radius:8px; border:1px solid var(--line-strong); background:var(--paper); color:var(--ink);">' +
       '</div>';
   });
   html += '<button class="btn ghost block" id="saveCatBudgets">Guardar presupuestos por categoría</button>';
@@ -1191,6 +1240,7 @@ function renderIndicadores(){
   html += '<div class="grid2">';
   html += statBox("Tasa de ahorro", fmtPct(ms.tasaAhorro));
   html += statBox("Gastos fijos / ingresos", ms.ingresos>0?fmtPct(ms.gastosFijos/ms.ingresos*100):"—");
+  html += statBox("Cuotas / ingresos", ms.ingresos>0?fmtPct(ms.gastosCuotas/ms.ingresos*100):"—");
   html += statBox("Gastos variables / ingresos", ms.ingresos>0?fmtPct(ms.gastosVariables/ms.ingresos*100):"—");
   html += statBox("Patrimonio neto", fmtMoney(nw));
   html += statBox("Meses de gastos cubiertos", mesesCubiertos.toFixed(1));
@@ -1299,6 +1349,9 @@ function calendarEventsForMonth(y,m){
   state.fixedExpenses.filter(function(f){return f.active;}).forEach(function(f){
     push(clamp(f.day,1,daysInMonth(y,m)), f.name+" · "+fmtMoney(f.amount), "var(--bad)");
   });
+  state.installments.filter(function(it){return it.active && installmentRemaining(it)>0;}).forEach(function(it){
+    push(clamp(it.day,1,daysInMonth(y,m)), it.name+" · cuota "+fmtMoney(installmentAmount(it)), "var(--warn)");
+  });
   state.goals.forEach(function(g){
     if(g.targetDate){
       var d = new Date(g.targetDate+"T00:00:00");
@@ -1364,20 +1417,29 @@ document.addEventListener("click", function(e){
 
   var fixedRow = t.closest("[data-fixed]");
   if(fixedRow){ openFixedExpenseModal(fixedRow.getAttribute("data-fixed")); return; }
+  if(t.id==="btnAddInstallment" || t.closest("#btnAddInstallment")){ openInstallmentModal(); return; }
+  var payInst = t.closest("[data-payinstallment]");
+  if(payInst){ payInstallment(payInst.getAttribute("data-payinstallment")); return; }
+  var editInst = t.closest("[data-editinstallment]");
+  if(editInst){ openInstallmentModal(editInst.getAttribute("data-editinstallment")); return; }
   var accRow = t.closest("[data-account]");
   if(accRow && !t.closest("#btnAddAccount")){ openAccountModal(accRow.getAttribute("data-account")); return; }
   var goalCard = t.closest("[data-editgoal]");
   if(goalCard){ openGoalModal(goalCard.getAttribute("data-editgoal")); return; }
   var aportarBtn = t.closest("[data-aportar]");
   if(aportarBtn){ openAporteModal(aportarBtn.getAttribute("data-aportar")); return; }
+  var retirarBtn = t.closest("[data-retirar]");
+  if(retirarBtn){ openRetiroModal(retirarBtn.getAttribute("data-retirar")); return; }
   var txRowEl = t.closest("[data-tx]");
   if(txRowEl){ openTxDetail(txRowEl.getAttribute("data-tx")); return; }
 
   if(t.id==="saveBudgetVariable"){ state.budgets.variableBudget = num("budgetVariable"); saveState(); showToast("Presupuesto guardado."); render(); return; }
   if(t.id==="saveCatBudgets"){
     Array.prototype.forEach.call(document.querySelectorAll("[data-catbudget]"), function(inp){
+      var cat = inp.getAttribute("data-catbudget");
       var v = parseFloat(inp.value);
-      if(v>0){ state.budgets.categoryBudgets[inp.getAttribute("data-catbudget")] = v; }
+      if(v>0){ state.budgets.categoryBudgets[cat] = v; }
+      else{ delete state.budgets.categoryBudgets[cat]; }
     });
     saveState(); showToast("Presupuestos guardados."); render();
     return;
@@ -1494,12 +1556,33 @@ function openAccountModal(id){
     field("text","accName","Nombre", acc?acc.name:"") +
     '<div class="field"><label>Tipo</label><select id="accType">'+typeOpts+'</select></div>' +
     (acc ? '' : field("number","accBalance","Saldo inicial","0")) +
+    (acc ? '<button class="link-btn" id="accAdjustToggle" style="padding-left:0;">Ajustar saldo actual</button>' : '') +
+    (acc ? '<div id="accAdjustBox" style="display:none;">' +
+        field("number","accAdjustAmount","Saldo real actual", Math.round(computeAccountBalance(acc.id))) +
+        '<div class="helptext">Esto crea un movimiento de ajuste por la diferencia, sin afectar el resto de tus cuentas.</div>' +
+        '<button class="btn ghost block" id="accAdjustSave" style="margin-top:8px;">Aplicar ajuste</button>' +
+      '</div>' : '') +
     '<div class="modal-actions">' +
       (acc? '<button class="btn danger" id="accDelete">Eliminar</button>' : '') +
       '<button class="btn primary block" id="accSave">Guardar</button>' +
     '</div>';
   openModal(html, function(){
     if(acc){
+      document.getElementById("accAdjustToggle").addEventListener("click", function(){
+        var box = document.getElementById("accAdjustBox");
+        box.style.display = box.style.display==="none" ? "block" : "none";
+      });
+      document.getElementById("accAdjustSave").addEventListener("click", function(){
+        var real = num("accAdjustAmount");
+        var current = computeAccountBalance(acc.id);
+        var diff = real-current;
+        if(Math.abs(diff)<1){ showToast("El saldo ya coincide."); return; }
+        state.transactions.push({
+          id:uid(), type: diff>0 ? "ingreso" : "gasto", date:todayISO(), accountId:acc.id,
+          category:"Ajuste", subtype: diff>0?undefined:"variable", description:"Ajuste de saldo", amount:Math.abs(diff)
+        });
+        saveState(); closeModal(); showToast("Saldo ajustado."); render();
+      });
       document.getElementById("accDelete").addEventListener("click", function(){
         var used = state.transactions.some(function(t){return t.accountId===acc.id||t.toAccountId===acc.id;});
         confirmAction(used?"Esta cuenta tiene movimientos asociados. ¿Eliminarla igual? Los movimientos quedarán con una referencia vacía.":"¿Eliminar esta cuenta?", function(){
@@ -1584,6 +1667,82 @@ function openFixedExpenseModal(id){
   });
 }
 
+function openInstallmentModal(id){
+  var it = id ? state.installments.find(function(x){return x.id===id;}) : null;
+  var catOpts = state.categories.map(function(c){return '<option value="'+c+'" '+(it&&it.category===c?"selected":"")+'>'+c+'</option>';}).join("");
+  var accOpts = state.accounts.map(function(a){return '<option value="'+a.id+'" '+(it&&it.accountId===a.id?"selected":"")+'>'+escapeHTML(a.name)+'</option>';}).join("");
+  var html = '<div class="modal-title">'+(it?"Editar compra en cuotas":"Nueva compra en cuotas")+'</div>' +
+    field("text","inName","Nombre / descripción", it?it.name:"") +
+    '<div class="field"><label>Categoría</label><select id="inCat">'+catOpts+'</select></div>' +
+    '<div class="field"><label>Cuenta desde donde se paga</label><select id="inAccount">'+accOpts+'</select></div>' +
+    field("number","inTotal","Monto total de la compra", it?it.totalAmount:"") +
+    field("number","inCount","Cantidad de cuotas", it?it.numInstallments:"12") +
+    (it ? '' : field("number","inPaid","Cuotas ya pagadas (si empezaste antes)","0")) +
+    field("number","inDay","Día aproximado de vencimiento", it?it.day:"10") +
+    '<div id="inPreview" class="helptext"></div>' +
+    '<div class="toggle-row field" style="margin-top:10px;"><label style="margin:0;">Activo</label><div class="switch '+(it&&!it.active?"":"on")+'" id="inActiveSwitch"></div></div>' +
+    '<div class="modal-actions">' +
+      (it? '<button class="btn danger" id="inDelete">Eliminar</button>' : '') +
+      '<button class="btn primary block" id="inSave">Guardar</button>' +
+    '</div>';
+  var activeState = it ? !!it.active : true;
+  openModal(html, function(sheet){
+    function updatePreview(){
+      var total = num("inTotal"), count = Math.max(1, num("inCount"));
+      var cuota = Math.round(total/count);
+      document.getElementById("inPreview").textContent = count+" cuotas de aproximadamente "+fmtMoney(cuota)+" cada una.";
+    }
+    ["inTotal","inCount"].forEach(function(id2){
+      document.getElementById(id2).addEventListener("input", updatePreview);
+    });
+    updatePreview();
+    document.getElementById("inActiveSwitch").addEventListener("click", function(){
+      activeState = !activeState; this.classList.toggle("on", activeState);
+    });
+    if(it){
+      document.getElementById("inDelete").addEventListener("click", function(){
+        confirmAction("¿Eliminar esta compra en cuotas? No se borran las cuotas ya registradas como gastos.", function(){
+          state.installments = state.installments.filter(function(x){return x.id!==it.id;});
+          saveState(); closeModal(); showToast("Compra en cuotas eliminada."); render();
+        });
+      });
+    }
+    document.getElementById("inSave").addEventListener("click", function(){
+      var name = document.getElementById("inName").value.trim();
+      var total = num("inTotal");
+      var count = Math.max(1, num("inCount"));
+      var day = clamp(num("inDay")||1,1,31);
+      var cat = document.getElementById("inCat").value;
+      var accountId = document.getElementById("inAccount").value;
+      if(!name||total<=0){ showToast("Completá nombre y monto total."); return; }
+      if(!accountId){ showToast("Elegí una cuenta."); return; }
+      if(it){ it.name=name; it.totalAmount=total; it.numInstallments=count; it.day=day; it.category=cat; it.accountId=accountId; it.active=activeState; }
+      else{
+        state.installments.push({
+          id:uid(), name:name, category:cat, accountId:accountId, totalAmount:total,
+          numInstallments:count, paidCount: clamp(num("inPaid")||0,0,count), day:day, active:activeState
+        });
+      }
+      saveState(); closeModal(); showToast("Compra en cuotas guardada."); render();
+    });
+  });
+}
+function payInstallment(id){
+  var it = state.installments.find(function(x){return x.id===id;});
+  if(!it) return;
+  if(installmentRemaining(it)<=0){ showToast("Esta compra ya está saldada."); return; }
+  var amt = installmentAmount(it);
+  var nextNum = it.paidCount+1;
+  state.transactions.push({
+    id:uid(), type:"gasto", date:todayISO(), accountId:it.accountId, category:it.category,
+    subtype:"cuota", description:it.name+" — cuota "+nextNum+"/"+it.numInstallments, amount:amt
+  });
+  it.paidCount = nextNum;
+  saveState();
+  showToast(installmentRemaining(it)<=0 ? "¡Última cuota pagada!" : "Cuota registrada.");
+  render();
+}
+
 function openGoalModal(id){
   var g = id ? state.goals.find(function(x){return x.id===id;}) : null;
   var html = '<div class="modal-title">'+(g?"Editar objetivo":"Nuevo objetivo")+'</div>' +
@@ -1639,6 +1798,28 @@ function openAporteModal(goalId){
       if(!amount||amount<=0){ showToast("Ingresá un monto válido."); return; }
       state.transactions.push({ id:uid(), type:"aporte", date:document.getElementById("apDate").value||todayISO(), accountId:document.getElementById("apAccount").value, goalId:goalId, amount:amount });
       saveState(); closeModal(); showToast("Aporte registrado."); render();
+    });
+  });
+}
+
+function openRetiroModal(goalId){
+  if(state.accounts.length===0){ showToast("Primero agregá una cuenta."); return; }
+  var g = state.goals.find(function(x){return x.id===goalId;});
+  var cur = computeGoalCurrent(goalId);
+  var opts = state.accounts.map(function(a){return '<option value="'+a.id+'">'+escapeHTML(a.name)+'</option>';}).join("");
+  var html = '<div class="modal-title">Retirar de '+escapeHTML(g.name)+'</div>' +
+    '<p class="helptext">Disponible en este objetivo: '+fmtMoney(cur)+'</p>' +
+    field("number","reAmount","Monto a retirar","") +
+    '<div class="field"><label>Hacia la cuenta</label><select id="reAccount">'+opts+'</select></div>' +
+    field("date","reDate","Fecha", todayISO()) +
+    '<button class="btn primary block" id="reSave">Retirar</button>';
+  openModal(html, function(){
+    document.getElementById("reSave").addEventListener("click", function(){
+      var amount = num("reAmount");
+      if(!amount||amount<=0){ showToast("Ingresá un monto válido."); return; }
+      if(amount>cur){ showToast("No podés retirar más de lo que hay en el objetivo."); return; }
+      state.transactions.push({ id:uid(), type:"retiro", date:document.getElementById("reDate").value||todayISO(), toAccountId:document.getElementById("reAccount").value, goalId:goalId, amount:amount });
+      saveState(); closeModal(); showToast("Retiro registrado."); render();
     });
   });
 }
@@ -1703,6 +1884,7 @@ function importBackup(file){
           categories: data.categories && data.categories.length ? data.categories : d.categories,
           accounts: data.accounts || [],
           fixedExpenses: data.fixedExpenses || [],
+          installments: data.installments || [],
           goals: data.goals || [],
           transactions: data.transactions || [],
           budgets: Object.assign({variableBudget:0,categoryBudgets:{}}, data.budgets||{})
@@ -1738,6 +1920,9 @@ function loadDemoData(){
   ]);
   var goal = {id:uid(), name:"Viaje", target:3000000, initialCurrent:1200000, targetDate: addMonths(new Date(),15).toISOString().slice(0,10), priority:"alta", monthlyContribution:120000};
   state.goals = state.goals.concat([goal]);
+  state.installments = state.installments.concat([
+    {id:uid(), name:"Notebook", category:"Compras", accountId:accBank.id, totalAmount:720000, numInstallments:12, paidCount:3, day:8, active:true}
+  ]);
   var now = new Date();
   var demoTx = [];
   [8,15,22].forEach(function(day, idx){
