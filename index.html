@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tablero de proveedores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e8ecef;--panel:#fff;--ink:#17232e;--mute:#5f6e7b;--line:#cfd7dd;--acc:#2f5d8a;--r:10px}
+@media(prefers-color-scheme:dark){:root{--bg:#10171d;--panel:#1a242d;--ink:#e6ecf0;--mute:#93a3b0;--line:#2c3a46;--acc:#6fa3d4}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 "Schibsted Grotesk",system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:20px 24px 8px}
+#titulo{font-size:26px;font-weight:800;border:0;background:none;padding:2px 4px;border-radius:6px;min-width:0;width:min(520px,100%)}
+#titulo:hover,#titulo:focus{background:var(--panel)}
+.btn{border:1px solid var(--line);background:var(--panel);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--acc)}
+.btn.main{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
+.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.stats{display:flex;flex-wrap:wrap;gap:8px;padding:8px 24px}
+.stat{border:1px solid var(--line);background:var(--panel);border-left:5px solid var(--c);border-radius:8px;padding:6px 12px;cursor:pointer;text-align:left}
+.stat b{font-size:20px;margin-right:6px}
+.stat.on{outline:2px solid var(--c)}
+.tools{display:flex;flex-wrap:wrap;gap:8px;padding:8px 24px 16px}
+.tools input,.tools select{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 10px}
+.tools input[type=search]{flex:1 1 220px}
+main{padding:0 24px 48px}
+h2{font-size:17px;margin:20px 0 10px;display:flex;gap:8px;align-items:center}
+h2 span{color:var(--mute);font-weight:400}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-top:5px solid var(--c);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.img{position:relative;display:block;aspect-ratio:16/10;background:var(--line);overflow:hidden}
+.img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top}
+.ph{position:absolute;inset:0;display:grid;place-items:center;font-size:44px;font-weight:800;color:var(--mute)}
+.body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.top{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.st{font-weight:700;color:var(--c)}
+.tp{color:var(--mute)}
+h3{margin:0;font-size:17px;line-height:1.2}
+.host{font-size:13px;color:var(--mute);overflow-wrap:anywhere}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+.tags span{background:var(--bg);border-radius:20px;padding:1px 9px;font-size:12.5px}
+.meta{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px}
+.stars{color:#c58a12;letter-spacing:1px}
+.nota{font-size:13.5px;color:var(--mute);white-space:pre-wrap}
+.act{margin-top:auto;display:flex;gap:6px;padding-top:6px}
+.act button,.act a{border:1px solid var(--line);background:none;border-radius:6px;padding:3px 10px;font-size:13px;cursor:pointer;text-decoration:none}
+.act button:hover,.act a:hover{border-color:var(--acc)}
+.empty{text-align:center;padding:64px 16px;color:var(--mute)}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:0;width:min(640px,94vw)}
+dialog::backdrop{background:#0008}
+form{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+form h2{grid-column:1/-1;margin:0}
+label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--mute)}
+label.w{grid-column:1/-1}
+label input,label select,label textarea{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:15px}
+.fbar{grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end;align-items:center}
+#msg{margin-right:auto;font-size:13px;color:var(--mute)}
+@media(max-width:560px){form{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header>
+  <input id="titulo" aria-label="Nombre del tablero" value="Mi marca · proveedores">
+  <div class="row">
+    <button class="btn" id="imp">Importar</button>
+    <button class="btn" id="exp">Exportar</button>
+    <button class="btn main" id="add">Agregar proveedor</button>
+    <input type="file" id="file" accept=".json" hidden>
+  </div>
+</header>
+<div class="stats" id="stats"></div>
+<div class="tools">
+  <input type="search" id="q" placeholder="Buscar por nombre, producto, país o nota">
+  <select id="ftipo" aria-label="Tipo"></select>
+  <select id="fpais" aria-label="País"></select>
+  <select id="group" aria-label="Agrupar">
+    <option value="">Sin agrupar</option>
+    <option value="estado">Agrupar por estado</option>
+    <option value="tipo">Agrupar por tipo</option>
+    <option value="pais">Agrupar por país</option>
+  </select>
+  <select id="sort" aria-label="Orden">
+    <option value="new">Más nuevos primero</option>
+    <option value="rating">Mejor puntaje primero</option>
+    <option value="name">Nombre A-Z</option>
+  </select>
+</div>
+<main id="main"></main>
+
+<dialog id="dlg">
+<form id="f">
+  <h2 id="ftit">Agregar proveedor</h2>
+  <label class="w">Link de la página
+    <span class="row" style="flex-wrap:nowrap"><input id="url" style="flex:1" placeholder="https://www.fabricante.com" required>
+    <button type="button" class="btn" id="fetch">Traer vista previa</button></span></label>
+  <label>Nombre<input id="nombre" required></label>
+  <label>País o ciudad<input id="pais"></label>
+  <label>Tipo<select id="tipo"></select></label>
+  <label>Estado<select id="estado"></select></label>
+  <label class="w">Productos que ofrece (separados por coma)<input id="prod" placeholder="remeras, buzos, bolsos"></label>
+  <label>Pedido mínimo<input id="moq" placeholder="50 unidades"></label>
+  <label>Precio de referencia<input id="precio" placeholder="USD 8 por unidad"></label>
+  <label>Puntaje<select id="rating"><option value="0">Sin puntaje</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>
+  <label>Contacto<input id="contacto" placeholder="mail, WhatsApp, persona"></label>
+  <label class="w">Imagen (se completa sola, o pegá la URL de una imagen)<input id="img"></label>
+  <label class="w">Notas<textarea id="notas" rows="3" placeholder="Qué te gustó, qué falta, qué te respondieron"></textarea></label>
+  <div class="fbar"><span id="msg"></span><button type="button" class="btn" id="cancel">Cancelar</button><button class="btn main">Guardar</button></div>
+</form>
+</dialog>
+
+<script>
+const ESTADOS=[['revisar','Por revisar','#6b7b89'],['contactado','Contactado','#2f6fb0'],['cotizo','Cotizó','#8a5fb8'],['muestra','Muestra pedida','#b5780b'],['elegido','Elegido','#2a8650'],['descartado','Descartado','#b4483f']];
+const TIPOS=['Fabricante','Mayorista','Distribuidor','Importador o trading','Dropshipping','Servicio (diseño, packaging, logística)','Otro'];
+const KEY='tablero-proveedores-v1';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const est=id=>ESTADOS.find(e=>e[0]===id)||ESTADOS[0];
+let D={titulo:'Mi marca · proveedores',items:[]};
+let fEstado='',editId=null;
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}}
+function fix(u){u=u.trim();return /^https?:\/\//i.test(u)?u:'https://'+u}
+function host(u){try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return u}}
+function thumb(p){return p.img||'https://image.thum.io/get/width/600/crop/400/'+p.url}
+const uniq=k=>[...new Set(D.items.map(i=>i[k]).filter(Boolean))].sort();
+
+function fillSelects(){
+  $('#tipo').innerHTML=TIPOS.map(t=>`<option>${esc(t)}</option>`).join('');
+  $('#estado').innerHTML=ESTADOS.map(e=>`<option value="${e[0]}">${e[1]}</option>`).join('');
+  const keep=[$('#ftipo').value,$('#fpais').value];
+  $('#ftipo').innerHTML='<option value="">Todos los tipos</option>'+uniq('tipo').map(t=>`<option>${esc(t)}</option>`).join('');
+  $('#fpais').innerHTML='<option value="">Todos los países</option>'+uniq('pais').map(t=>`<option>${esc(t)}</option>`).join('');
+  $('#ftipo').value=keep[0];$('#fpais').value=keep[1];
+}
+
+function card(p){
+  const e=est(p.estado);
+  const tags=(p.prod||'').split(',').map(s=>s.trim()).filter(Boolean).map(s=>`<span>${esc(s)}</span>`).join('');
+  const meta=[p.rating>0?`<span class="stars" title="Puntaje ${p.rating} de 5">${'★'.repeat(p.rating)}${'☆'.repeat(5-p.rating)}</span>`:'',p.moq?`<span>Mínimo: ${esc(p.moq)}</span>`:'',p.precio?`<span>${esc(p.precio)}</span>`:'',p.contacto?`<span>Contacto: ${esc(p.contacto)}</span>`:''].join('');
+  return `<article class="card" style="--c:${e[2]}" data-id="${p.id}">
+  <a class="img" href="${esc(p.url)}" target="_blank" rel="noopener" aria-label="Abrir ${esc(p.nombre)}"><span class="ph">${esc((p.nombre||'?')[0].toUpperCase())}</span><img loading="lazy" referrerpolicy="no-referrer" src="${esc(thumb(p))}" alt="" onerror="this.remove()"></a>
+  <div class="body">
+    <div class="top"><span class="st">${e[1]}</span><span class="tp">${esc(p.tipo)}</span></div>
+    <h3>${esc(p.nombre)}</h3>
+    <div class="host">${esc(host(p.url))}${p.pais?' — '+esc(p.pais):''}</div>
+    ${tags?`<div class="tags">${tags}</div>`:''}
+    ${meta?`<div class="meta">${meta}</div>`:''}
+    ${p.notas?`<div class="nota">${esc(p.notas)}</div>`:''}
+    <div class="act"><a href="${esc(p.url)}" target="_blank" rel="noopener">Abrir sitio</a><button data-a="edit">Editar</button><button data-a="del">Borrar</button></div>
+  </div></article>`;
+}
+
+function render(){
+  fillSelects();
+  const q=$('#q').value.toLowerCase(),ft=$('#ftipo').value,fp=$('#fpais').value,g=$('#group').value,s=$('#sort').value;
+  $('#stats').innerHTML=ESTADOS.map(e=>{const n=D.items.filter(i=>i.estado===e[0]).length;return `<button class="stat${fEstado===e[0]?' on':''}" style="--c:${e[2]}" data-e="${e[0]}"><b>${n}</b>${e[1]}</button>`}).join('');
+  let L=D.items.filter(i=>(!fEstado||i.estado===fEstado)&&(!ft||i.tipo===ft)&&(!fp||i.pais===fp)&&(!q||[i.nombre,i.url,i.prod,i.pais,i.notas,i.tipo,i.contacto].join(' ').toLowerCase().includes(q)));
+  L.sort(s==='rating'?(a,b)=>b.rating-a.rating:s==='name'?(a,b)=>a.nombre.localeCompare(b.nombre):(a,b)=>b.id-a.id);
+  if(!D.items.length){$('#main').innerHTML='<div class="empty"><p><b>Todavía no hay proveedores.</b></p><p>Tocá “Agregar proveedor”, pegá el link de su página y guardalo.</p></div>';return}
+  if(!L.length){$('#main').innerHTML='<div class="empty">Ningún proveedor coincide con los filtros.</div>';return}
+  let groups=[['',L]];
+  if(g){const m={};L.forEach(i=>{const k=g==='estado'?est(i.estado)[1]:(i[g]||'Sin dato');(m[k]=m[k]||[]).push(i)});
+    groups=Object.entries(m);if(g==='estado')groups.sort((a,b)=>ESTADOS.findIndex(e=>e[1]===a[0])-ESTADOS.findIndex(e=>e[1]===b[0]))}
+  $('#main').innerHTML=groups.map(([k,arr])=>(k?`<h2>${esc(k)}<span>${arr.length}</span></h2>`:'')+`<div class="grid">${arr.map(card).join('')}</div>`).join('');
+}
+
+function openForm(p){
+  editId=p?p.id:null;
+  $('#ftit').textContent=p?'Editar proveedor':'Agregar proveedor';
+  const v=p||{url:'',nombre:'',pais:'',tipo:TIPOS[0],estado:'revisar',prod:'',moq:'',precio:'',rating:0,contacto:'',img:'',notas:''};
+  for(const k of ['url','nombre','pais','tipo','estado','prod','moq','precio','rating','contacto','img','notas'])$('#'+k).value=v[k];
+  $('#msg').textContent='';$('#dlg').showModal();$('#url').focus();
+}
+
+async function preview(){
+  const raw=$('#url').value;if(!raw.trim()){$('#msg').textContent='Pegá primero el link.';return}
+  const u=fix(raw);$('#url').value=u;$('#msg').textContent='Buscando imagen y título…';
+  try{
+    const r=await fetch('https://api.microlink.io/?url='+encodeURIComponent(u));
+    const j=await r.json();const d=j.data||{};
+    if(j.status!=='success')throw 0;
+    if(!$('#nombre').value)$('#nombre').value=(d.publisher||d.title||host(u)).slice(0,80);
+    $('#img').value=(d.image&&d.image.url)||(d.logo&&d.logo.url)||'';
+    $('#msg').textContent=$('#img').value?'Listo, se trajo la imagen.':'No tiene imagen; se usará una captura de la página.';
+  }catch(e){
+    if(!$('#nombre').value)$('#nombre').value=host(u);
+    $('#msg').textContent='No se pudo leer la página. Se usará una captura, o pegá una imagen a mano.';
+  }
+}
+
+$('#f').addEventListener('submit',ev=>{
+  ev.preventDefault();
+  const p={id:editId||Date.now(),url:fix($('#url').value)};
+  for(const k of ['nombre','pais','tipo','estado','prod','moq','precio','contacto','img','notas'])p[k]=$('#'+k).value.trim();
+  p.rating=+$('#rating').value;
+  if(editId)D.items=D.items.map(i=>i.id===editId?p:i);else D.items.push(p);
+  save();$('#dlg').close();render();
+});
+$('#add').onclick=()=>openForm();
+$('#cancel').onclick=()=>$('#dlg').close();
+$('#fetch').onclick=preview;
+$('#titulo').oninput=e=>{D.titulo=e.target.value;document.title=D.titulo;save()};
+['q','ftipo','fpais','group','sort'].forEach(i=>$('#'+i).addEventListener('input',render));
+$('#stats').onclick=e=>{const b=e.target.closest('[data-e]');if(!b)return;fEstado=fEstado===b.dataset.e?'':b.dataset.e;render()};
+$('#main').onclick=e=>{
+  const a=e.target.closest('[data-a]');if(!a)return;
+  const id=+a.closest('.card').dataset.id,p=D.items.find(i=>i.id===id);
+  if(a.dataset.a==='edit')openForm(p);
+  else if(confirm('¿Borrar "'+p.nombre+'"?')){D.items=D.items.filter(i=>i.id!==id);save();render()}
+};
+$('#exp').onclick=()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(D,null,2)],{type:'application/json'}));
+  a.download='proveedores.json';a.click();URL.revokeObjectURL(a.href);
+};
+$('#imp').onclick=()=>$('#file').click();
+$('#file').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    const j=JSON.parse(await f.text());const items=Array.isArray(j)?j:j.items;
+    if(!Array.isArray(items))throw 0;
+    const ids=new Set(D.items.map(i=>i.id));
+    items.forEach(i=>{if(i.url&&!ids.has(i.id))D.items.push({rating:0,estado:'revisar',tipo:TIPOS[0],...i,id:i.id||Date.now()+Math.random()})});
+    if(j.titulo&&!Array.isArray(j)&&D.titulo==='Mi marca · proveedores')D.titulo=j.titulo;
+    save();$('#titulo').value=D.titulo;render();
+  }catch(err){alert('El archivo no tiene el formato esperado. Usá uno exportado desde este tablero.')}
+  e.target.value='';
+};
+
+(async function init(){
+  let had=false;
+  try{const s=localStorage.getItem(KEY);if(s){D=JSON.parse(s);had=true}}catch(e){}
+  if(!had){try{const r=await fetch('data/proveedores.json');if(r.ok){const j=await r.json();D={titulo:j.titulo||D.titulo,items:j.items||[]}}}catch(e){}}
+  $('#titulo').value=D.titulo;document.title=D.titulo;render();
+})();
+</script>
+</body>
+</html>
