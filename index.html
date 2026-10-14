@@ -76,12 +76,16 @@ label input,label select,label textarea{border:1px solid var(--line);background:
 #msg{margin-right:auto;font-size:13px;color:var(--mute)}
 @media(max-width:560px){#f{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.btn.warn{border-color:#e3a400}
+#sf{padding:22px;display:grid;gap:12px}#sf h2{margin:0}#sf p{margin:0;font-size:13px;color:var(--mute)}
+#smsg{margin-right:auto;font-size:13px;color:var(--mute)}
 </style>
 </head>
 <body>
 <header>
   <input id="titulo" aria-label="Nombre del tablero" value="Mi marca · proveedores">
   <div class="row">
+    <button class="btn warn" id="sync">Solo en este navegador</button>
     <button class="btn" id="imp">Importar</button>
     <button class="btn" id="exp">Exportar</button>
     <button class="btn main" id="add">Agregar proveedor</button>
@@ -141,6 +145,17 @@ label input,label select,label textarea{border:1px solid var(--line);background:
 </form>
 </dialog>
 
+<dialog id="sdlg"><form id="sf">
+<h2>Guardar en GitHub</h2>
+<p>Los datos se guardan en el archivo data/proveedores.json de tu repo. Así los ves iguales desde cualquier dispositivo y los comparten con tu colega. Si el repo es público, cualquiera puede verlos.</p>
+<label>Usuario u organización<input id="so" required></label>
+<label>Repositorio<input id="sr" required></label>
+<label>Rama<input id="sb" placeholder="main"></label>
+<label>Token de GitHub<input id="st" type="password" autocomplete="off" required></label>
+<p>Cada persona crea su token en GitHub: Settings, Developer settings, Personal access tokens, Fine-grained tokens. Elegí solo este repositorio y el permiso Contents: Read and write. El token queda guardado solo en este navegador.</p>
+<div class="fbar"><span id="smsg"></span><button type="button" class="btn" id="sx">Desconectar</button><button type="button" class="btn" id="sc">Cancelar</button><button class="btn main">Conectar</button></div>
+</form></dialog>
+
 <script>
 const ESTADOS=[['revisar','Por revisar','#6b7b89'],['contactado','Contactado','#2f6fb0'],['cotizo','Cotizó','#8a5fb8'],['muestra','Muestra pedida','#b5780b'],['elegido','Elegido','#2a8650'],['descartado','Descartado','#b4483f']];
 const TIPOS=['Fabricante','Mayorista','Distribuidor','Importador o trading','Dropshipping','Servicio (diseño, packaging, logística)','Otro'];
@@ -150,8 +165,11 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const est=id=>ESTADOS.find(e=>e[0]===id)||ESTADOS[0];
 let D={titulo:'Mi marca · proveedores',items:[],notas:[]};
 let fEstado='',editId=null;
+const SK='tablero-sync';
+let SY=null,sha=null,timer=null,busy=false,dirty=false;
+try{SY=JSON.parse(localStorage.getItem(SK))}catch(_){}
 
-function save(){try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}if(SY){clearTimeout(timer);timer=setTimeout(push,1200)}}
 function fix(u){u=u.trim();return /^https?:\/\//i.test(u)?u:'https://'+u}
 function host(u){try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return u}}
 function thumb(p){return p.img||'https://image.thum.io/get/width/600/crop/400/'+p.url}
@@ -265,6 +283,63 @@ $('#file').onchange=async e=>{
   e.target.value='';
 };
 
+const b64=t=>btoa(unescape(encodeURIComponent(t)));
+const unb64=t=>decodeURIComponent(escape(atob(t.replace(/\n/g,''))));
+const api=()=>`https://api.github.com/repos/${SY.owner}/${SY.repo}/contents/data/proveedores.json`;
+const hdr=()=>({Authorization:'Bearer '+SY.token,Accept:'application/vnd.github+json'});
+function setSt(t){$('#sync').textContent=t;$('#sync').classList.toggle('warn',!SY)}
+function merge(r){
+  const ids=new Set(D.items.map(i=>i.id));(r.items||[]).forEach(i=>{if(!ids.has(i.id))D.items.push(i)});
+  const nid=new Set((D.notas||[]).map(n=>n.id));(r.notas||[]).forEach(n=>{if(!nid.has(n.id))(D.notas=D.notas||[]).push(n)});
+}
+async function pull(){
+  const r=await fetch(api()+'?ref='+encodeURIComponent(SY.branch||'main')+'&t='+Date.now(),{headers:hdr(),cache:'no-store'});
+  if(r.status===404){sha=null;return null}
+  if(!r.ok)throw new Error(r.status);
+  const j=await r.json();sha=j.sha;return JSON.parse(unb64(j.content));
+}
+async function push(){
+  timer=null;
+  if(!SY)return false;
+  if(busy){dirty=true;return false}
+  busy=true;setSt('Guardando…');let ok=false;
+  try{
+    for(let k=0;k<2&&!ok;k++){
+      const body={message:'Actualizar tablero',content:b64(JSON.stringify(D,null,2)),branch:SY.branch||'main'};
+      if(sha)body.sha=sha;
+      const r=await fetch(api(),{method:'PUT',headers:{...hdr(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(r.ok){sha=(await r.json()).content.sha;ok=true}
+      else if(r.status===409||r.status===422){const rem=await pull();if(rem){merge(rem);render()}}
+      else throw new Error(r.status);
+    }
+  }catch(e){}
+  setSt(ok?'Guardado en GitHub':'No se pudo guardar: tocá para revisar');
+  busy=false;if(dirty){dirty=false;push()}
+  return ok;
+}
+async function refresh(){
+  if(!SY||busy||timer)return;
+  try{
+    setSt('Sincronizando…');const rem=await pull();
+    if(rem){D={titulo:rem.titulo||D.titulo,items:rem.items||[],notas:rem.notas||[]};try{localStorage.setItem(KEY,JSON.stringify(D))}catch(_){}$('#titulo').value=D.titulo;document.title=D.titulo;render();setSt('Guardado en GitHub')}
+    else await push();
+  }catch(e){setSt('Sin conexión con GitHub: tocá para revisar')}
+}
+const detect=()=>{const m=location.hostname.match(/^(.+)\.github\.io$/);return m?{owner:m[1],repo:location.pathname.split('/')[1]||''}:{owner:'',repo:''}};
+$('#sync').onclick=()=>{const d=SY||{...detect(),branch:'main',token:''};$('#so').value=d.owner;$('#sr').value=d.repo;$('#sb').value=d.branch||'main';$('#st').value=d.token;$('#smsg').textContent='';$('#sdlg').showModal()};
+$('#sc').onclick=()=>$('#sdlg').close();
+$('#sx').onclick=()=>{SY=null;try{localStorage.removeItem(SK)}catch(_){}setSt('Solo en este navegador');$('#sdlg').close()};
+$('#sf').addEventListener('submit',async e=>{
+  e.preventDefault();const old=SY;
+  SY={owner:$('#so').value.trim(),repo:$('#sr').value.trim(),branch:$('#sb').value.trim()||'main',token:$('#st').value.trim()};
+  $('#smsg').textContent='Conectando…';
+  let ok=false;
+  try{const rem=await pull();if(rem)merge(rem);ok=await push()}catch(err){}
+  if(ok){try{localStorage.setItem(SK,JSON.stringify(SY))}catch(_){}$('#sdlg').close();render()}
+  else{SY=old;setSt(SY?'Guardado en GitHub':'Solo en este navegador');$('#smsg').textContent='No se pudo conectar. Revisá usuario, repo, rama y que el token tenga Contents: Read and write.'}
+});
+window.addEventListener('focus',refresh);
+
 const stars=(n,attr)=>[1,2,3,4,5].map(i=>`<button type="button" class="${i<=n?'on':''}" ${attr}="${i}" aria-label="${i} de 5">★</button>`).join('');
 const paint=()=>{$('#pick').innerHTML=stars(+$('#rating').value,'data-p')};
 $('#pick').onclick=e=>{const b=e.target.closest('[data-p]');if(!b)return;const n=+b.dataset.p;$('#rating').value=+$('#rating').value===n?0:n;paint()};
@@ -303,6 +378,7 @@ $('#notes').onclick=e=>{
   $('#ntipo').innerHTML=NT.map(t=>`<option value="${t[0]}">${t[1]}</option>`).join('');
   try{$('#nautor').value=localStorage.getItem(AK)||''}catch(_){}
   $('#titulo').value=D.titulo;document.title=D.titulo;render();
+  setSt(SY?'Sincronizando…':'Solo en este navegador');refresh();
 })();
 </script>
 </body>
