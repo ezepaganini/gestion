@@ -10,7 +10,15 @@ Página estática para juntar y evaluar fabricantes y proveedores de tu futura m
 ## Notas del equipo
 En el costado hay un muro de notas tipo post-it: mensaje para proveedor, pendiente, pregunta o idea. Cada nota puede asociarse a un proveedor, se marca como lista y el botón Copiar deja el texto listo para pegar en un mail o WhatsApp.
 
-## Cómo se guardan los datos
+## Guardar en GitHub (recomendado)
+Sin esto, cada navegador guarda lo suyo y no se ve nada en otro dispositivo, otro navegador u otra dirección. Con el botón **Solo en este navegador** (arriba a la derecha) conectás el tablero a tu repo y los datos se guardan solos en `data/proveedores.json`.
+1. En GitHub: Settings, Developer settings, Personal access tokens, Fine-grained tokens, Generate new token.
+2. Elegí solo este repositorio y el permiso **Contents: Read and write**.
+3. En el tablero tocá el botón, completá usuario, repositorio, rama y token, y tocá Conectar.
+4. Tu colega repite lo mismo con su propio token (tiene que ser colaborador del repo).
+Si el repo es público, los datos también lo son. El token se guarda solo en cada navegador.
+
+## Sin conexión a GitHub
 - Todo lo que cargás queda en el **navegador** (localStorage) del dispositivo que usás.
 - Para tener los datos en el repo (y verlos desde cualquier dispositivo): botón **Exportar**, reemplazá `data/proveedores.json` y hacé commit. Si un navegador no tiene datos propios, la página carga ese archivo.
 - **Importar** acepta ese mismo archivo para restaurar o sumar proveedores.
