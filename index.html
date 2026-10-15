@@ -59,6 +59,9 @@ button,input{font:inherit;color:inherit}
 #hint{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:50;max-width:min(560px,92vw);text-align:center;background:var(--panel);border-radius:999px;padding:9px 20px;box-shadow:var(--sh);color:var(--mute);font-size:14px}
 #hint[hidden]{display:none}
 :is(button,input):focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.corner{position:fixed;left:12px;bottom:12px;z-index:50;display:flex;flex-direction:column;gap:6px}
+.corner button{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--mute);display:grid;place-items:center;cursor:pointer;box-shadow:var(--sh);opacity:.75}
+.corner button:hover{opacity:1;color:var(--ink);border-color:var(--acc)}
 </style>
 </head>
 <body>
@@ -72,9 +75,13 @@ button,input{font:inherit;color:inherit}
   <button id="fit">Ver todo</button>
   <button id="hd">Ocultar descartados</button>
   <button id="sh" class="warn">Solo en este navegador</button>
-  <button id="ex">Descargar copia</button>
 </div>
 <div id="board"><div id="world"></div></div>
+<div class="corner">
+  <button id="ex" title="Descargar copia" aria-label="Descargar copia"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg></button>
+  <button id="im" title="Restaurar copia" aria-label="Restaurar copia"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg></button>
+  <input type="file" id="file" accept=".json" hidden>
+</div>
 <div id="hint" hidden></div>
 <script>
 const $=s=>document.querySelector(s);
@@ -305,9 +312,31 @@ $('#hd').onclick=e=>{const on=document.body.classList.toggle('hide-d');e.target.
 $('#ex').onclick=()=>{
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([JSON.stringify(D)],{type:'application/json'}));
-  a.download='mapa-proveedores.json';a.click();URL.revokeObjectURL(a.href);
+  a.download='mapa-proveedores-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);
 };
 
+$('#im').onclick=()=>$('#file').click();
+$('#file').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  let j;
+  try{j=JSON.parse(await f.text());if(!Array.isArray(j.nodes))throw 0}
+  catch(err){alert('El archivo no es una copia descargada desde esta página.');return}
+  if(!confirm('Esto reemplaza todo el mapa actual'+(base?', para todos los que tengan el link,':'')+' por el de la copia ('+j.nodes.length+' elementos). ¿Seguro?'))return;
+  const nodes=j.nodes,ids=new Set(nodes.map(n=>n.id));
+  const links=(Array.isArray(j.links)?j.links:[]).filter(l=>ids.has(l[0])&&ids.has(l[1]));
+  for(const k in tms){clearTimeout(tms[k]);delete tms[k];pend--}
+  if(base){
+    const body={nodos:{},links:{}};
+    nodes.forEach(n=>{body.nodos['n'+n.id]=n});
+    links.forEach(l=>{body.links['l'+l[0]+'_'+l[1]]=l});
+    pend++;
+    try{const r=await fetch(base+'/mapa.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw 0;setSt(true)}
+    catch(err){pend--;setSt(false);alert('No se pudo restaurar en la nube. Probá de nuevo.');return}
+    pend--;
+  }
+  D.nodes=nodes;D.links=links;synced=new Set(ids);
+  save();render();fit();
+};
 render();
 setSt();refresh();setInterval(refresh,4000);addEventListener('focus',refresh);
 </script>
