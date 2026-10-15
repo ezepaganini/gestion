@@ -1,31 +1,22 @@
-# Tablero de proveedores
+# Mapa de proveedores
 
-Página estática para juntar y evaluar fabricantes y proveedores de tu futura marca. Pegás un link, se trae la imagen y el título de la página, y le sumás tipo, productos, país, mínimo de compra, precio, puntaje, estado y notas.
+Un pizarrón para explorar y juntar ideas mientras buscás fabricantes y proveedores. Pensado para unas semanas de búsqueda, entre dos personas.
 
-## Publicarlo en GitHub Pages
-1. Creá un repo y subí estos archivos (`index.html`, `README.md` y la carpeta `data/`).
-2. En el repo: **Settings → Pages → Build and deployment → Deploy from a branch → `main` / `(root)`**.
-3. En un minuto queda en `https://TU-USUARIO.github.io/NOMBRE-DEL-REPO/`.
+- Pegá el link de un proveedor arriba y Enter: aparece una tarjeta con la imagen de su página.
+- Arrastrá tarjetas, notas y temas. Arrastrá el fondo para moverte y usá la rueda del mouse para acercar o alejar.
+- **Unir** conecta dos elementos con una línea (si ya estaban unidos, los separa).
+- Cada tarjeta tiene estado (tocá la etiqueta), estrellas, nombre y notas. Los descartados se ven apagados y se pueden ocultar.
+- Notas de colores y "Mensaje a proveedor" con botón para copiar.
 
-## Notas del equipo
-En el costado hay un muro de notas tipo post-it: mensaje para proveedor, pendiente, pregunta o idea. Cada nota puede asociarse a un proveedor, se marca como lista y el botón Copiar deja el texto listo para pegar en un mail o WhatsApp.
+## Publicarlo
+Subí `index.html` a un repo y activá **Settings, Pages, Deploy from a branch, main / root**.
 
-## Guardar en GitHub (recomendado)
-Sin esto, cada navegador guarda lo suyo y no se ve nada en otro dispositivo, otro navegador u otra dirección. Con el botón **Solo en este navegador** (arriba a la derecha) conectás el tablero a tu repo y los datos se guardan solos en `data/proveedores.json`.
-1. En GitHub: Settings, Developer settings, Personal access tokens, Fine-grained tokens, Generate new token.
-2. Elegí solo este repositorio y el permiso **Contents: Read and write**.
-3. En el tablero tocá el botón, completá usuario, repositorio, rama y token, y tocá Conectar.
-4. Tu colega repite lo mismo con su propio token (tiene que ser colaborador del repo).
-Si el repo es público, los datos también lo son. El token se guarda solo en cada navegador.
+## Compartido para cualquiera que tenga el link
+Se guarda en una base gratuita de Firebase, así que todos ven y editan el mismo mapa y los cambios aparecen solos en unos segundos.
+1. Entrá a https://console.firebase.google.com y creá un proyecto (sin Analytics).
+2. Build, Realtime Database, Create Database, **modo de prueba**.
+3. En **Rules** pegá `{"rules":{".read":true,".write":true}}` y tocá Publish (así no vence a los 30 días).
+4. Copiá la URL de la pestaña Data (termina en `firebaseio.com` o `firebasedatabase.app`).
+5. Pegala en `index.html`, en `const DB_URL='';`, y subí el cambio. Desde ahí funciona en cualquier dispositivo sin configurar nada.
 
-## Sin conexión a GitHub
-- Todo lo que cargás queda en el **navegador** (localStorage) del dispositivo que usás.
-- Para tener los datos en el repo (y verlos desde cualquier dispositivo): botón **Exportar**, reemplazá `data/proveedores.json` y hacé commit. Si un navegador no tiene datos propios, la página carga ese archivo.
-- **Importar** acepta ese mismo archivo para restaurar o sumar proveedores.
-- **Trabajo en dos:** cada navegador guarda lo suyo. Para compartir proveedores y notas, uno exporta, sube el `data/proveedores.json` al repo y el otro hace lo mismo con **Importar** (suma lo que falta sin pisar lo que ya tiene).
-- Exportá seguido: si borrás los datos del navegador, se pierde lo que no exportaste.
-
-## Vista previa de las páginas
-- Se pide a [Microlink](https://microlink.io) (gratis, con límite diario) la imagen y el título de la página.
-- Si no hay imagen, se usa una captura de [thum.io](https://www.thum.io).
-- Siempre podés pegar a mano la URL de una imagen.
+Cualquiera que tenga el link puede editar o borrar. **Descargar copia** guarda un archivo de respaldo.
