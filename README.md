@@ -20,4 +20,4 @@ Se guarda en una base gratuita de Firebase, así que todos ven y editan el mismo
 4. Copiá la URL de la pestaña Data (termina en `firebaseio.com` o `firebasedatabase.app`).
 5. Pegala en `index.html`, en `const DB_URL='';`, y subí el cambio. Desde ahí funciona en cualquier dispositivo sin configurar nada.
 
-Cualquiera que tenga el link puede editar o borrar. **Descargar copia** guarda un archivo de respaldo.
+Cualquiera que tenga el link puede editar o borrar. Los dos botoncitos de la esquina inferior izquierda sirven de respaldo: la flecha hacia abajo descarga una copia del mapa y la flecha hacia arriba restaura una copia (reemplaza todo el mapa actual, para todos).
