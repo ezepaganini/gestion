@@ -5,6 +5,7 @@ Un pizarrón para explorar y juntar ideas mientras buscás fabricantes y proveed
 - Pegá el link de un proveedor arriba y Enter: aparece una tarjeta con la imagen de su página.
 - Arrastrá tarjetas, notas y temas. Arrastrá el fondo para moverte y usá la rueda del mouse para acercar o alejar.
 - **Unir** conecta dos elementos con una línea (si ya estaban unidos, los separa).
+- Para cambiar el tamaño de cualquier elemento, arrastrá el círculo azul de su esquina inferior derecha (doble clic lo vuelve al tamaño normal).
 - Cada tarjeta tiene estado (tocá la etiqueta), estrellas, nombre y notas. Los descartados se ven apagados y se pueden ocultar.
 - Notas de colores y "Mensaje a proveedor" con botón para copiar.
 
