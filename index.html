@@ -18,7 +18,9 @@ button,input{font:inherit;color:inherit}
 #world{position:absolute;left:0;top:0;transform-origin:0 0}
 #lines{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
 #lines path{fill:none;stroke:var(--acc);stroke-width:2.8;stroke-linecap:round;opacity:.65}
-.n{position:absolute;cursor:move}
+.n{position:absolute;cursor:move;transform-origin:0 0}
+.rs{position:absolute;right:-9px;bottom:-9px;width:22px;height:22px;border-radius:50%;background:var(--acc);border:3px solid var(--panel);cursor:nwse-resize;display:none;z-index:6;transform:scale(calc(1/var(--s,1)))}
+.n:hover .rs,.n.sel .rs{display:block}
 .n.link{width:250px;background:var(--panel);border:3px solid var(--c);border-radius:26px;padding:8px;box-shadow:var(--sh)}
 .n.d{opacity:.45;filter:grayscale(.7)}
 .hide-d .n.d{display:none}
@@ -42,7 +44,7 @@ button,input{font:inherit;color:inherit}
 .nt{font-weight:800;font-size:12.5px;margin-bottom:4px}
 .n.tema{background:var(--bg);color:#fff;border-radius:999px;padding:14px 28px;min-width:130px;font-size:19px;font-weight:800;text-align:center;box-shadow:var(--sh)}
 .n.tema .tx:empty::before{color:#fff}
-.tools{position:absolute;left:0;right:0;top:100%;padding-top:7px;display:none;gap:5px;justify-content:center;flex-wrap:wrap;z-index:5}
+.tools{position:absolute;left:0;right:0;top:100%;padding-top:7px;display:none;gap:5px;justify-content:center;flex-wrap:wrap;z-index:5;transform:scale(calc(1/var(--s,1)));transform-origin:50% 0}
 .n:hover .tools,.n.sel .tools,.n:focus-within .tools{display:flex}
 .tools button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:3px 12px;font-size:12.5px;cursor:pointer;box-shadow:var(--sh)}
 .connecting .n{cursor:crosshair}
@@ -101,10 +103,11 @@ function applyView(){
 }
 function zoomAt(mx,my,f){const V=D.V,z=Math.min(2,Math.max(.25,V.z*f));V.x=mx-(mx-V.x)*(z/V.z);V.y=my-(my-V.y)*(z/V.z);V.z=z;applyView();save()}
 
+function scl(n,el){const r=n.t==='note'?-1.2:n.t==='msg'?1:0,s=n.s||1;el.style.transform=`rotate(${r}deg) scale(${s})`;el.style.setProperty('--s',s)}
 function mk(n){
   const el=document.createElement('div');
   el.className='n '+(n.t==='link'?'link':n.t);el.dataset.id=n.id;
-  el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.zIndex=n.z||1;
+  el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.zIndex=n.z||1;scl(n,el);
   if(n.id===selId)el.classList.add('sel');
   if(n.id===conn)el.classList.add('src');
   const ed=(f,ph,cls='tx')=>`<div class="${cls}" contenteditable="plaintext-only" spellcheck="false" data-f="${f}" data-ph="${ph}">${esc(n[f])}</div>`;
@@ -123,6 +126,7 @@ function mk(n){
     el.style.setProperty('--bg',PAL[(n.c||0)%PAL.length]);
     el.innerHTML=(n.t==='msg'?'<div class="nt">Mensaje para proveedor</div>':'')+ed('txt','Escribí acá…')+tools('<button data-a="col">Color</button>'+(n.t==='msg'?'<button data-a="copy">Copiar</button>':''));
   }
+  el.insertAdjacentHTML('beforeend','<div class="rs" title="Arrastrá para cambiar el tamaño (doble clic: tamaño normal)"></div>');
   return el;
 }
 function swap(n){const o=els[n.id],el=mk(n);o.replaceWith(el);els[n.id]=el;drawLines();save()}
@@ -131,7 +135,7 @@ function drawLines(){
   L.innerHTML=D.links.map(([a,b])=>{
     const A=N(a),B=N(b),ea=els[a],eb=els[b];
     if(!A||!B||!ea||!eb||!ea.offsetWidth||!eb.offsetWidth)return'';
-    const x1=A.x+ea.offsetWidth/2,y1=A.y+ea.offsetHeight/2,x2=B.x+eb.offsetWidth/2,y2=B.y+eb.offsetHeight/2,dx=(x2-x1)/2;
+    const sa=A.s||1,sb=B.s||1,x1=A.x+ea.offsetWidth*sa/2,y1=A.y+ea.offsetHeight*sa/2,x2=B.x+eb.offsetWidth*sb/2,y2=B.y+eb.offsetHeight*sb/2,dx=(x2-x1)/2;
     return `<path d="M${x1} ${y1}C${x1+dx} ${y1} ${x2-dx} ${y2} ${x2} ${y2}"/>`;
   }).join('');
 }
@@ -169,7 +173,7 @@ async function addLink(raw){
 function fit(){
   if(!D.nodes.length)return;
   let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;
-  D.nodes.forEach(n=>{const e=els[n.id];if(!e.offsetWidth)return;x1=Math.min(x1,n.x);y1=Math.min(y1,n.y);x2=Math.max(x2,n.x+e.offsetWidth);y2=Math.max(y2,n.y+e.offsetHeight)});
+  D.nodes.forEach(n=>{const e=els[n.id];if(!e.offsetWidth)return;x1=Math.min(x1,n.x);y1=Math.min(y1,n.y);x2=Math.max(x2,n.x+e.offsetWidth*(n.s||1));y2=Math.max(y2,n.y+e.offsetHeight*(n.s||1))});
   if(x1>x2)return;
   const z=Math.min(1.2,Math.max(.25,Math.min((innerWidth-80)/(x2-x1),(innerHeight-200)/(y2-y1))));
   D.V={z,x:(innerWidth-(x2-x1)*z)/2-x1*z,y:(innerHeight-(y2-y1)*z)/2-y1*z+40};applyView();save();
@@ -237,6 +241,7 @@ $('#board').addEventListener('pointerdown',e=>{
   if(e.button!==0)return;
   const el=e.target.closest('.n');
   if(el)select(+el.dataset.id);
+  if(el&&e.target.classList.contains('rs')){const n=N(+el.dataset.id);moved=false;drag={rs:1,n,el,sx:e.clientX,sy:e.clientY,w:el.offsetWidth*(n.s||1)*D.V.z,s0:n.s||1};return}
   if(el&&e.target.closest('[contenteditable],button'))return;
   moved=false;
   if(el){const n=N(+el.dataset.id);n.z=++zt;el.style.zIndex=n.z;drag={n,el,sx:e.clientX,sy:e.clientY,ox:n.x,oy:n.y}}
@@ -248,6 +253,7 @@ addEventListener('pointermove',e=>{
   if(Math.abs(dx)+Math.abs(dy)>4)moved=true;
   if(!moved)return;
   if(drag.pan){D.V.x=drag.ox+dx;D.V.y=drag.oy+dy;applyView()}
+  else if(drag.rs){drag.n.s=Math.round(Math.min(3,Math.max(.4,drag.s0*(drag.w+dx)/drag.w))*100)/100;scl(drag.n,drag.el);drawLines()}
   else{drag.n.x=Math.round(drag.ox+dx/D.V.z);drag.n.y=Math.round(drag.oy+dy/D.V.z);drag.el.style.left=drag.n.x+'px';drag.el.style.top=drag.n.y+'px';drawLines()}
 });
 addEventListener('pointerup',()=>{
@@ -285,6 +291,7 @@ $('#world').addEventListener('input',e=>{
 });
 addEventListener('keydown',e=>{if(e.key==='Escape'&&conn!==null)setConn(null)});
 
+$('#world').addEventListener('dblclick',e=>{if(!e.target.classList.contains('rs'))return;const n=N(+e.target.closest('.n').dataset.id);n.s=1;scl(n,els[n.id]);drawLines();save();qn(n)});
 $('#u').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.value.trim()){addLink(e.target.value);e.target.value=''}});
 $('#bt').onclick=()=>add({t:'tema',c:Math.floor(Math.random()*5),txt:''});
 $('#bn').onclick=()=>add({t:'note',c:0,txt:''});
